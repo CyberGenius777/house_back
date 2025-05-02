@@ -50,7 +50,7 @@ model Apartment {
 
   residentsAmount Int? // рекомендованное место для хранения количества жильцов
 
-  @@unique([entrance, apartmentNumber]) // если уникальность в пределах подъезда
+  @@unique([apartmentNumber, entrance], name: "apartmentNumber_entrance") // если уникальность в пределах подъезда
 }
 
 model User {

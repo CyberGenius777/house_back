@@ -4715,7 +4715,7 @@ export namespace Prisma {
 
   export type ApartmentWhereUniqueInput = Prisma.AtLeast<{
     id?: string
-    entrance_apartmentNumber?: ApartmentEntranceApartmentNumberCompoundUniqueInput
+    apartmentNumber_entrance?: ApartmentApartmentNumber_entranceCompoundUniqueInput
     AND?: ApartmentWhereInput | ApartmentWhereInput[]
     OR?: ApartmentWhereInput[]
     NOT?: ApartmentWhereInput | ApartmentWhereInput[]
@@ -4725,7 +4725,7 @@ export namespace Prisma {
     square?: FloatNullableFilter<"Apartment"> | number | null
     residentsAmount?: IntNullableFilter<"Apartment"> | number | null
     residents?: ResidentListRelationFilter
-  }, "id" | "entrance_apartmentNumber">
+  }, "id" | "apartmentNumber_entrance">
 
   export type ApartmentOrderByWithAggregationInput = {
     id?: SortOrder
@@ -5202,9 +5202,9 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
-  export type ApartmentEntranceApartmentNumberCompoundUniqueInput = {
-    entrance: number
+  export type ApartmentApartmentNumber_entranceCompoundUniqueInput = {
     apartmentNumber: number
+    entrance: number
   }
 
   export type ApartmentCountOrderByAggregateInput = {

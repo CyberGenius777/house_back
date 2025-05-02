@@ -1,25 +1,33 @@
-import type { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction } from 'express'
+import { verifyToken } from '../utils/jwt' // Путь к вашей функции проверки токена
 
-import { verifyToken } from '../utils/jwt';
-
-export interface AuthRequest extends Request {
-  user?: { userId: string; role: string };
+interface UserPayload {
+  userId: string
+  role: string
 }
 
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  const authHeader = req.headers.authorization;
+export interface AuthRequest extends Request {
+  user?: UserPayload
+}
+
+export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): any => {
+  const authHeader = req.headers.authorization
+  console.log('authHeader', authHeader)
   if (!authHeader) {
-    res.status(401).json({ error: 'Нет токена' });
-    return;  // Хитрость: возвращаем void, чтобы прекратить выполнение
+    res.status(401).json({ error: 'Нет токена' })
+    return res.status(401).json({ error: 'Нет токена' })
   }
 
-  const token = authHeader.split(' ')[1];
+  const token = authHeader.split(' ')[1]
+  console.log('token полученный', token)
   try {
-    const decoded = verifyToken(token) as { userId: string; role: string };
-    req.user = decoded;
-    next();
-  } catch {
-    res.status(401).json({ error: 'Неверный токен' });
-    return;
+    const decoded = verifyToken(token) as UserPayload
+    console.log('decoded', decoded)
+    req.user = decoded
+    next()
+  } catch (error) {
+    console.error('Ошибка при проверке токена:', error) // Логируем ошибку
+    res.status(401).json({ error: 'Неверный токен' })
+    next(error) // Передаем ошибку дальше
   }
-};
+}

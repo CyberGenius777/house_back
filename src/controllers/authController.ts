@@ -1,124 +1,146 @@
-import { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { Request, Response } from 'express'
+import { v4 as uuidv4 } from 'uuid'
+import { z } from 'zod'
 
-import { hashPassword, comparePassword } from '../utils/bcrypt';
-import { generateToken } from '../utils/jwt';
-import { PrismaClient } from '../../generated/prisma';
+import { hashPassword, comparePassword } from '../utils/bcrypt'
+import { generateToken } from '../utils/jwt'
+import { PrismaClient } from '../../generated/prisma'
 
-const prisma = new PrismaClient();
-
-interface RegisterRequestBody {
-  login: string;
-  password: string;
-  fullName: string;
-  apartmentNumber?: number;
-  floor?: number;
-  phone?: string;
-  email?: string;
-  role?: 'resident' | 'admin';
-}
+const prisma = new PrismaClient()
 
 interface LoginRequestBody {
-  login: string;
-  password: string;
+  login: string
+  password: string
 }
 
-export const register = async (req: Request<{}, {}, RegisterRequestBody>, res: Response): Promise<void> => {
-  try {
-    const {
-      login,
-      password,
-      fullName,
-      apartmentNumber = '',
-      floor,
-      phone,
-      email,
-      role = 'resident',
-    } = req.body;
+const RegisterSchema = z.object({
+  login: z.string().min(3, 'Логин слишком короткий'),
+  password: z.string().min(6, 'Пароль слишком короткий'),
+  fullName: z.string().min(1, 'ФИО обязательно'),
+  phone: z.string().optional(),
+  email: z.string().email('Некорректный email').optional(),
+  apartmentNumber: z.number().int().positive().optional(),
+  entrance: z.number().int().positive().optional(),
+  floor: z.number().int().optional(),
+  role: z.enum(['resident', 'admin']).default('resident'),
+})
 
-    // Проверить уникальность login
-    const existingUser = await prisma.user.findUnique({ where: { login } });
-    if (existingUser) {
-      res.status(400).json({ error: 'Логин уже используется' });
-      return;
+export const register = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const parsed = RegisterSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.format() })
+      return
     }
 
-    // Проверить уникальность email
+    const { login, password, fullName, phone, email, apartmentNumber, entrance, floor, role } =
+      parsed.data
+
+    // Проверка уникальности login
+    const existingUser = await prisma.user.findUnique({ where: { login } })
+    if (existingUser) {
+      res.status(400).json({ error: 'Такой логин уже существует' })
+      return
+    }
+
+    // Проверка уникальности email
     if (email) {
-      const existingEmail = await prisma.resident.findUnique({ where: { email } });
+      const existingEmail = await prisma.resident.findUnique({ where: { email } })
       if (existingEmail) {
-        res.status(400).json({ error: 'Email уже используется' });
-        return;
+        res.status(400).json({ error: 'такой email уже существует' })
+        return
       }
     }
 
-    if (apartmentNumber) {
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      let apartment = null
 
-    let apartment = await prisma.apartment.findUnique({where: { apartmentNumber } });
+      // Если указаны apartmentNumber и entrance, ищем квартиру по уникальной паре
+      if (apartmentNumber && entrance) {
+        apartment = await tx.apartment.findFirst({
+          where: { apartmentNumber, entrance },
+        })
 
-    if (!apartment) {
-      apartment = await prisma.apartment.create({
+        if (!apartment) {
+          apartment = await tx.apartment.create({
+            data: {
+              id: uuidv4(),
+              apartmentNumber,
+              entrance,
+              floor,
+            },
+          })
+        }
+      }
+
+      // Хеширование пароля
+      const hashedPassword = await hashPassword(password)
+
+      // Создание пользователя
+      const user = await tx.user.create({
         data: {
-          id: uuidv4(), // Генерируем apartmentId автоматически
-          apartmentNumber,
-          floor,
+          id: uuidv4(),
+          login,
+          password: hashedPassword,
+          role,
         },
-      });
-    }
-  }
+      })
 
-    // Хэш пароля
-    const hashedPassword = await hashPassword(password);
+      // Создание жильца
+      await tx.resident.create({
+        data: {
+          id: uuidv4(),
+          fullName,
+          phone,
+          email,
+          ownerType: 'owner',
+          animals: [],
+          user: { connect: { id: user.id } },
+          ...(apartment && { apartment: { connect: { id: apartment.id } } }),
+        },
+      })
 
-    // Создать пользователя
-    const user = await prisma.user.create({
-      data: { login, password: hashedPassword, role },
-    });
+      return user
+    })
 
+    const token = generateToken({
+      userId: transactionResult.id,
+      role: transactionResult.role,
+    })
 
-    
-
-    // Создать жильца и привязать к квартире
-    await prisma.resident.create({
-      data: {
-        id: uuidv4(),
-        fullName,
-        phone,
-        email,
-        user: { connect: { id: user.id } },
-        ...(apartment && {apartment: { connect: { id: apartment.id } }}), // Связь через apartmentId
-      },
-    });
-
-    // Генерируем JWT
-    const token = generateToken({ userId: user.id, role: user.role });
-
-    res.json({ token, userId: user.id, role: user.role });
+    res.json({
+      token,
+      userId: transactionResult.id,
+      role: transactionResult.role,
+    })
   } catch (error) {
-    console.error('Ошибка регистрации:', error);
-    res.status(500).json({ error: 'Ошибка регистрации' });
+    console.error('Ошибка регистрации:', error)
+    res.status(500).json({ error: 'Ошибка регистрации' })
   }
-};
-
-export const login = async (req: Request<{}, {}, LoginRequestBody>, res: Response): Promise<void> => {
+}
+export const login = async (
+  req: Request<{}, {}, LoginRequestBody>,
+  res: Response,
+): Promise<void> => {
   try {
-    const { login, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { login } });
+    const { login, password } = req.body
+
+    const user = await prisma.user.findUnique({ where: { login } })
     if (!user) {
-      res.status(400).json({ error: 'Неверный логин или пароль' });
-      return;
+      res.status(400).json({ error: 'Такого пользователя не существует' })
+      return
     }
 
-    const isValid = await comparePassword(password, user.password);
+    const isValid = await comparePassword(password, user.password)
     if (!isValid) {
-      res.status(400).json({ error: 'Неверный логин или пароль' });
-      return;
+      res.status(400).json({ error: 'Неверный логин или пароль' })
+      return
     }
 
-    const token = generateToken({ userId: user.id, role: user.role });
-    res.json({ token, userId: user.id, role: user.role });
+    const token = generateToken({ userId: user.id, role: user.role })
+    res.status(200).json({ token, userId: user.id, role: user.role })
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Ошибка авторизации' });
+    console.error(error)
+    res.status(500).json({ error: 'Ошибка авторизации' })
   }
-};
+}

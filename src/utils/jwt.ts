@@ -1,12 +1,17 @@
 // jwt.ts
-import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+interface TokenPayload {
+  userId: string
+  role: string
+}
 
-export const generateToken = (payload: object) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
-};
+const JWT_SECRET = process.env.JWT_SECRET || 'secret'
+
+export const generateToken = (payload: TokenPayload) => {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
+}
 
 export const verifyToken = (token: string) => {
-  return jwt.verify(token, JWT_SECRET);
-};
+  return jwt.verify(token, JWT_SECRET)
+}
