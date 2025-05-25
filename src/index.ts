@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import cookieParser from 'cookie-parser'
 
 import profileRouter from './controllers/profileController'
 import router from './routes/auth.routes'
@@ -10,6 +11,7 @@ dotenv.config()
 const app = express()
 app.use(cors())
 app.use(express.json())
+app.use(cookieParser())
 
 app.use('/auth', router)
 app.use('/user', profileRouter) // например, профиль доступен по /user/profile

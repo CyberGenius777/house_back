@@ -2,11 +2,12 @@ import { Request, Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
 
+import { AuthRequest } from '../middlewares/authMiddleware'
+
 import { hashPassword, comparePassword } from '../utils/bcrypt'
 import { generateToken } from '../utils/jwt'
-import { PrismaClient } from '../../generated/prisma'
 
-const prisma = new PrismaClient()
+import { prisma } from '../prisma'
 
 interface LoginRequestBody {
   login: string
@@ -123,7 +124,19 @@ export const login = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { login, password } = req.body
+    const parsed = z
+      .object({
+        login: z.string().min(1),
+        password: z.string().min(1),
+      })
+      .safeParse(req.body)
+
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.format() })
+      return
+    }
+
+    const { login, password } = parsed.data
 
     const user = await prisma.user.findUnique({ where: { login } })
     if (!user) {
@@ -138,9 +151,42 @@ export const login = async (
     }
 
     const token = generateToken({ userId: user.id, role: user.role })
-    res.status(200).json({ token, userId: user.id, role: user.role })
+    res
+      .cookie('token', token, {
+        httpOnly: true,
+        // secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .status(200)
+      .json({ token, userId: user.id, role: user.role })
   } catch (error) {
     console.error(error)
     res.status(500).json({ error: 'Ошибка авторизации' })
   }
+}
+
+export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Пользователь не авторизован' })
+    return
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.userId },
+    include: { resident: { include: { apartment: true } } },
+  })
+
+  if (!user) {
+    res.status(404).json({ error: 'Пользователь не найден' })
+    return
+  }
+
+  res.status(200).json({
+    id: user.id,
+    login: user.login,
+    role: user.role,
+    fullName: user.resident?.fullName,
+    apartment: user.resident?.apartment,
+  })
 }

@@ -185,17 +185,18 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
+  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
         "fromEnvVar": "DATABASE_URL",
-        "value": "prisma+postgres://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiYWVlMGIxN2MtZjc4Zi00YmYyLWFkOWQtN2EwODgwMTk1MjA4IiwidGVuYW50X2lkIjoiYzcxY2U2YWNiMTU3YzJkODUyZjBhNzAwMmJiMzA1NWM3OWQxOTYzNWE0NjYyODIxZDFlMGMxYjdiZmM1ZDMxMSIsImludGVybmFsX3NlY3JldCI6IjBhOTk2MTA0LWM4YjEtNDY2Yy1iNzkwLWQ0N2IyNjI5NjNiMyJ9.QzLCNnpYoS9ak-O6bqsYC5HTjQZBuReVmLSeZsxsSpI"
+        "value": null
       }
     }
   },
   "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\n// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?\n// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum Role {\n  admin\n  resident\n}\n\nenum OwnerType {\n  owner\n  tenant\n}\n\nmodel Resident {\n  id        String    @id @default(uuid())\n  addedDate DateTime  @default(now())\n  fullName  String\n  phone     String?\n  email     String?   @unique\n  ownerType OwnerType @default(owner)\n  animals   String[]  @default([])\n\n  apartmentId String?\n  apartment   Apartment? @relation(fields: [apartmentId], references: [id])\n\n  user   User?   @relation(fields: [userId], references: [id])\n  userId String? @unique\n}\n\nmodel Apartment {\n  id              String     @id @default(uuid())\n  apartmentNumber Int?\n  entrance        Int?\n  floor           Int?\n  square          Float?\n  residents       Resident[]\n\n  residentsAmount Int? // рекомендованное место для хранения количества жильцов\n\n  @@unique([apartmentNumber, entrance], name: \"apartmentNumber_entrance\") // если уникальность в пределах подъезда\n}\n\nmodel User {\n  id       String @id @default(uuid())\n  login    String @unique\n  password String\n  role     Role\n\n  resident Resident? // связь к Resident (один к одному)\n}\n",
   "inlineSchemaHash": "f330ff6970b1d0882e3d61ef4fc28aa2fa0f9475b53ee157f081f0bd2c2e6aa8",
-  "copyEngine": false
+  "copyEngine": true
 }
 config.dirname = '/'
 
